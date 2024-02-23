@@ -1,3 +1,4 @@
+from collections import Counter
 from typing import Self
 import itertools
 import matplotlib.pyplot as plt
@@ -7,6 +8,8 @@ from functools import reduce
 
 from examples import *
 import numpy as np
+
+from trp.utils import array_to_tex_matrix
 
 np.set_printoptions(precision=4, suppress=True)
 
@@ -183,7 +186,7 @@ class MarkovChain:
             plt.plot(self.simulate_trajectory(num_steps, v0))
         plt.show()
 
-    def find_stationare(self):
+    def find_stationary(self):
         """
         vP = v (v - вектор-строка, стационарное распределение)
         v (P - E) = 0
@@ -199,9 +202,11 @@ class MarkovChain:
         A = np.vstack([A, np.ones((1, A.shape[1]))])
         return np.linalg.solve(A, b)
 
+    def construct_vt(self, v0: np.array, t: int):
+        vt = np.zeros(len(self.states))
+        final_states = [self.simulate_trajectory(t, v0)[-1] for _ in range(len(self.states))]
+        for key, value in Counter(final_states).items():
+            vt[key] = value / len(self.states)
+        return vt
 
-task = MarkovChain(MATRICES['1'])
 
-print(task.describe())
-# print(task.canonicalForm())
-print(task.find_stationare())
