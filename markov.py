@@ -2,17 +2,20 @@ from typing import Self
 import itertools
 import matplotlib.pyplot as plt
 import networkx as nx
-import numpy as np
 from math import gcd
 from functools import reduce
+
 from examples import *
+import numpy as np
+
+np.set_printoptions(precision=4, suppress=True)
 
 
 class MarkovChain:
     def __init__(self, matrix: np.array, stochastic_property=False):
         """
-        stochastic_property: bool. Позволит быстро заполнить матрицу, не проверяя корректность введённых данных.
-
+        :param matrix:
+        :param stochastic_property: Позволит быстро заполнить матрицу, не проверяя корректность введённых данных.
         """
         assert all(map(lambda s: s >= 0, np.nditer(matrix))) is True, 'Элементы матрицы должны быть неотрицательными.'
         assert not stochastic_property or all(map(lambda s: s == 1, np.sum(matrix, axis=1))) is True, 'Сумма чисел во всех строках матрицы должна быть равна 1.'
@@ -34,6 +37,9 @@ class MarkovChain:
         pos = nx.circular_layout(self.graph)
         nx.draw(self.graph, pos, with_labels=True)
         plt.show()
+
+    def get_lim_P_t(self, state1: int, state2: int, time):
+        return np.linalg.matrix_power(self.matrix, time)[state1 - 1, state2 - 1]
 
     def _getStrongComponents(self):
         return list(nx.strongly_connected_components(self.graph))
@@ -62,7 +68,8 @@ class MarkovChain:
         :return:
         """
         canonic = np.zeros((len(self.states), len(self.states)))
-        canonic_list = list(itertools.chain(*[self.findCyclicSubclasses(sublist, self.period(sublist[0]), extendFlag=True) for sublist in self.orderedRelevantList()[:-1]])) + self.orderedRelevantList()[-1]
+        canonic_list = list(itertools.chain(*[self.findCyclicSubclasses(sublist, self.period(sublist[0]), extendFlag=True) for sublist in self.orderedRelevantList()[:-1]])) + \
+                       self.orderedRelevantList()[-1]
         for i in range(len(self.states)):
             for j in range(len(self.states)):
                 canonic[i][j] = self.matrix[canonic_list[i] - 1][canonic_list[j] - 1]
@@ -134,14 +141,14 @@ class MarkovChain:
         powers = [i for i in range(1, len(self.states) + 1) if np.linalg.matrix_power(self.matrix, i)[node - 1][node - 1] > 0]
         return reduce(gcd, powers) if powers else 0
 
-    def findMinimalLengthOfPathToSelf(self, node):
+    def find_min_len_of_path2self(self, node):
         return min(map(lambda s: len(s), [k for k in list(nx.simple_cycles(self.graph)) if node in k]))
 
     @classmethod
     def fastinit(cls, data: list[list]) -> Self:
         """
         Быстрая инициализация объекта. Достаточно передать список списков строк, содержащих индексы, где элементы отличны от нуля.
-        t = MarkovProcess.fastinit([
+        t = MarkovChain.fastinit([
             [1, 4],
             [2, 3],
             [4],
@@ -158,8 +165,43 @@ class MarkovChain:
                 matrix[i][k] = 1
         return cls(matrix, stochastic_property=False)
 
+    def simulate_trajectory(self, num_steps: int, v0: np.array) -> list[int]:
+        n_states = len(self.states)
+        trajectory = [np.argmax(v0)]
+        for _ in range(num_steps):
+            current_state = trajectory[-1]
+            next_state = np.random.choice(n_states, p=self.matrix[current_state])
+            trajectory.append(next_state)
+        return trajectory
 
-task = MarkovChain(M1)
+    def draw_trajectory(self, num_steps: int, initial_vectors: list[np.array]):
+        plt.xlabel('Шаги')
+        plt.ylabel('Состояния')
+        plt.title(f'Траектория цепи Маркова для {num_steps} шагов')
+        plt.yticks(range(0, len(self.states)))
+        for v0 in initial_vectors:
+            plt.plot(self.simulate_trajectory(num_steps, v0))
+        plt.show()
+
+    def find_stationare(self):
+        """
+        vP = v (v - вектор-строка, стационарное распределение)
+        v (P - E) = 0
+        Сумма всех компонент v = 1, т.к. это стохастический вектор.
+        (P - E) ^ T v ^ T = 0
+        Выкинем любую строку из (P - E) ^ T, т.к. они линейно зависимые и добавим строку, содержащую информацию о сумме v.
+        :return:
+        """
+        N = len(self.states)
+        A = (self.matrix - np.eye(N)).T
+        b = np.append(np.zeros(N - 1), 1)
+        A = np.delete(A, 0, axis=0)
+        A = np.vstack([A, np.ones((1, A.shape[1]))])
+        return np.linalg.solve(A, b)
+
+
+task = MarkovChain(MATRICES['1'])
+
 print(task.describe())
-np.set_printoptions(precision=2)
-print(task.canonicalForm())
+# print(task.canonicalForm())
+print(task.find_stationare())
